@@ -183,6 +183,19 @@ The following controls must be verified before production deployment:
 These are deployment requirements, not claims that all
 production controls have already been implemented.
 
+### Sandbox Concurrency Control
+
+The sandbox currently uses a bounded semaphore to allow a maximum of two simultaneous executions per Python process.
+
+- Requests wait up to one second for an available execution slot.
+- Requests that cannot acquire a slot receive the `busy` status.
+- Execution slots are released in a `finally` block, including when execution raises an exception.
+- This control is process-local. Multiple backend workers can each create their own limit, multiplying total concurrent executions.
+- The current deployment should use one backend worker unless a shared cross-process concurrency limiter is implemented.
+
+The semaphore limits concurrent sandbox requests; it does not replace API rate limiting, host resource monitoring or infrastructure-level capacity controls.
+
+
 ## 13. Known Limitations and Residual Risks
 
 - Docker containers share the host Linux kernel.

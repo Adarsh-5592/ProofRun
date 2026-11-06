@@ -46,11 +46,25 @@ it inside isolated Docker containers.
 
 ## Current Progress
 
-The Docker sandbox is implemented and nine automated tests
-have passed.
+The Docker sandbox and security controls are implemented.
+All 19 automated tests pass.
 
-Backend, frontend, database integration and Vultr deployment
-are pending.
+Implemented:
+- Restricted Docker execution environment
+- Resource and output limits
+- Network and filesystem isolation
+- Non-root execution
+- Automatic container cleanup after execution
+- Stale-container cleanup utility
+- Per-process concurrency limit (2 simultaneous executions)
+- Security and integration documentation
+
+Pending:
+- Backend and AI integration
+- Frontend integration
+- Database integration
+- End-to-end testing
+- Vultr deployment and production hardening
 
 ## Security Notice
 

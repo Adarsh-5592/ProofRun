@@ -112,3 +112,30 @@ Automatic scheduling and recovery after host restarts must be
 configured and verified separately during deployment.
 
 Do not expose Docker daemon access to untrusted users.
+
+## Concurrency Limits
+
+The sandbox limits simultaneous executions within a single Python process.
+
+- Maximum concurrent executions: 2
+- Maximum wait for an available execution slot: 1 second
+- If both slots remain occupied, the next request receives `busy`.
+- The execution slot is released after completion, timeout, or an exception.
+
+### Busy response
+
+When the sandbox is at capacity, `run_code()` returns:
+
+- `status`: `busy`
+- `stdout`: empty string
+- `stderr`: empty string
+- `exit_code`: `null`
+- `timed_out`: `false`
+- `output_limited`: `false`
+- `error`: `Sandbox is busy. Please try again shortly.`
+
+### Production deployment note
+
+The concurrency limit is per Python process, not shared across multiple processes or backend workers.
+
+For the current implementation, run the backend with one worker to keep the limit effective. If multiple workers are required, implement a shared concurrency limiter before increasing the worker count.

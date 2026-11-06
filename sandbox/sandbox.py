@@ -4,6 +4,7 @@ import selectors
 import subprocess
 import time
 import uuid
+import threading
 
 
 IMAGE = "proofrun-sandbox:1.0"
@@ -11,6 +12,12 @@ IMAGE = "proofrun-sandbox:1.0"
 MAX_CODE_BYTES = 256 * 1024
 MAX_OUTPUT_BYTES = 1024 * 1024
 MAX_TIMEOUT = 30
+MAX_CONCURRENT_EXECUTIONS = 2
+SLOT_WAIT_SECONDS = 1
+
+_execution_slots = threading.BoundedSemaphore(
+    MAX_CONCURRENT_EXECUTIONS
+)
 
 
 
@@ -38,7 +45,7 @@ def _inspect_container_state(container_id: str) -> dict:
 
     return state
 
-def run_code(code: str, timeout_seconds: int = 10) -> dict:
+def _run_code(code: str, timeout_seconds: int = 10) -> dict:
     started = time.monotonic()
 
     result = {
@@ -291,3 +298,28 @@ def run_code(code: str, timeout_seconds: int = 10) -> dict:
         )
 
     return result
+
+
+def run_code(code: str, timeout_seconds: int = 10) -> dict:
+    """Run code with a bounded number of concurrent executions."""
+    started = time.monotonic()
+
+    if not _execution_slots.acquire(timeout=SLOT_WAIT_SECONDS):
+        return {
+            "status": "busy",
+            "stdout": "",
+            "stderr": "",
+            "exit_code": None,
+            "timed_out": False,
+            "output_limited": False,
+            "duration_ms": round((time.monotonic() - started) * 1000),
+            "error": "Sandbox is busy. Please try again shortly.",
+            "cleanup_ok": True,
+            "oom_killed": False,
+            "container_state": None,
+        }
+
+    try:
+        return _run_code(code, timeout_seconds)
+    finally:
+        _execution_slots.release()
