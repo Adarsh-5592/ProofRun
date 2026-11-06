@@ -119,3 +119,83 @@ output limits, timeout enforcement and automatic container cleanup.
 
 The sandbox is designed to make execution controlled,
 observable and repeatable.
+
+## 10. Threat Model
+
+ProofRun treats AI-generated Python code as untrusted input.
+
+Potential threats include:
+
+| Threat | Protection |
+|---|---|
+| Host filesystem access | Read-only container filesystem |
+| Network communication | Docker network disabled |
+| Privilege escalation | Non-root user and no-new-privileges |
+| Excessive memory consumption | 128 MB memory limit |
+| CPU exhaustion | CPU quota, CPU time limit and execution timeout |
+| Process creation attacks | 32-process limit |
+| Excessive output | 1 MB output limit |
+| Large code submissions | 256 KB input limit |
+| Container persistence | Forced cleanup after execution |
+| Container escape | Docker isolation and host hardening |
+
+## 11. Trust Boundaries
+
+ProofRun contains the following trust boundaries:
+
+1. Frontend to backend:
+   All incoming requests must be validated.
+
+2. Backend to AI provider:
+   AI-generated code must be considered untrusted.
+
+3. Backend to sandbox:
+   Only controlled execution requests should reach the sandbox.
+
+4. Sandbox to host:
+   Generated code must not receive Docker socket access,
+   host filesystem mounts or application secrets.
+
+5. Sandbox to user:
+   Execution results must be returned through controlled
+   application responses.
+
+The host operating system and Docker daemon are part of
+the trusted computing base.
+
+## 12. Operational Security Requirements
+
+The following controls must be verified before production deployment:
+
+- Restrict Docker daemon access to trusted backend processes.
+- Never expose the Docker socket over a public network.
+- Do not mount host directories into execution containers.
+- Keep API credentials outside source code and container environments.
+- Configure firewall rules and restrict public ports.
+- Secure SSH access.
+- Use HTTPS for public application traffic.
+- Apply authentication and rate limiting to execution endpoints.
+- Limit concurrent sandbox executions.
+- Monitor host CPU, memory and disk usage.
+- Keep Docker and operating system packages updated.
+- Verify cleanup of abandoned containers after unexpected failures.
+
+These are deployment requirements, not claims that all
+production controls have already been implemented.
+
+## 13. Known Limitations and Residual Risks
+
+- Docker containers share the host Linux kernel.
+- Docker isolation is not an absolute guarantee against
+  kernel vulnerabilities or container escapes.
+- A process or host crash can prevent normal cleanup.
+- Docker daemon access is effectively privileged host access.
+- Resource limits do not eliminate all host-level denial-of-service risks.
+- The default seccomp profile provides additional syscall restrictions
+  but is not a complete security boundary.
+
+For highly adversarial workloads, stronger isolation technologies
+such as gVisor or dedicated microVMs should be evaluated.
+
+Production deployment must include host monitoring,
+concurrency controls and stale-container recovery.

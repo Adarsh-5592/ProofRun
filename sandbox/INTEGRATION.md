@@ -57,3 +57,58 @@ All generated code must pass through run_code().
 
 The sandbox module requires Docker access.
 Do not expose the Docker socket to the frontend or generated code.
+
+## Stale Container Cleanup
+
+Module: sandbox/cleanup.py
+
+The cleanup utility identifies abandoned ProofRun containers
+that are older than five minutes.
+
+It only considers containers with this label:
+
+proofrun.managed=true
+
+Eligible container states:
+- created
+- exited
+- dead
+
+Running containers are never automatically removed.
+
+### Dry-run
+
+Preview stale containers without deleting anything:
+
+sudo python sandbox/cleanup.py
+
+### Remove stale containers
+
+Deletion requires explicit confirmation through the --delete flag:
+
+sudo python sandbox/cleanup.py --delete
+
+### Custom age threshold
+
+The default threshold is 300 seconds (5 minutes).
+
+Example:
+
+sudo python sandbox/cleanup.py --older-than 600
+
+### Safety guarantees
+
+- Dry-run is the default.
+- Only ProofRun-managed containers are considered.
+- Recent containers are ignored.
+- Running containers are protected.
+- Deletion requires the explicit --delete flag.
+- Docker errors and cleanup failures are reported.
+
+### Operational note
+
+The cleanup utility is currently a manually invoked recovery tool.
+Automatic scheduling and recovery after host restarts must be
+configured and verified separately during deployment.
+
+Do not expose Docker daemon access to untrusted users.
