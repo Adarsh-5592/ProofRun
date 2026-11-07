@@ -1,8 +1,11 @@
 
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
+from slowapi import _rate_limit_exceeded_handler
+from slowapi.errors import RateLimitExceeded
 
 from app.core.config import settings
+from app.core.rate_limiter import limiter
 from app.database.connection import Base, engine
 from app.models import User, Task, Execution
 
@@ -21,6 +24,13 @@ app = FastAPI(
     title=settings.app_name,
     description="Secure AI-generated code execution platform.",
     version="1.0.0",
+)
+
+# Register rate limiter
+app.state.limiter = limiter
+app.add_exception_handler(
+    RateLimitExceeded,
+    _rate_limit_exceeded_handler,
 )
 
 
@@ -63,4 +73,3 @@ def root():
         "message": "Welcome to ProofRun API",
         "docs": "/docs",
     }
-

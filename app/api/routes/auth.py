@@ -1,7 +1,9 @@
-from fastapi import APIRouter, Depends, HTTPException, status
-from app.api.dependencies import get_current_user
+
+from fastapi import APIRouter, Depends, HTTPException, Request, status
 from sqlalchemy.orm import Session
 
+from app.api.dependencies import get_current_user
+from app.core.rate_limiter import limiter
 from app.core.security import (
     create_access_token,
     hash_password,
@@ -28,7 +30,7 @@ def register_user(
     user_data: UserRegister,
     db: Session = Depends(get_db),
 ):
-    email = str(user_data.email).lower()
+    email = str(user_data.email).strip().lower()
 
     existing_user = db.query(User).filter(User.email == email).first()
 
@@ -60,11 +62,13 @@ def register_user(
 
 
 @router.post("/login", response_model=TokenResponse)
+@limiter.limit("5/minute")
 def login_user(
+    request: Request,
     login_data: UserLogin,
     db: Session = Depends(get_db),
 ):
-    email = str(login_data.email).lower()
+    email = str(login_data.email).strip().lower()
 
     user = db.query(User).filter(User.email == email).first()
 
@@ -80,15 +84,14 @@ def login_user(
 
     if not user.is_active:
         raise HTTPException(
-            status_code=status.HTTP_403_FORBIDDEN,
-            detail="Account is inactive",
+            status_code=status.HTTP_401_UNAUTHORIZED,
+            detail="Invalid email or password",
+            headers={"WWW-Authenticate": "Bearer"},
         )
 
     access_token = create_access_token(user.id)
 
     return TokenResponse(access_token=access_token)
-
-
 
 
 @router.get("/me", response_model=UserResponse)

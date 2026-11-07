@@ -1,3 +1,4 @@
+
 from fastapi import Depends, HTTPException, status
 from fastapi.security import HTTPBearer, HTTPAuthorizationCredentials
 from jwt.exceptions import InvalidTokenError
@@ -8,11 +9,11 @@ from app.database.connection import get_db
 from app.models.user import User
 
 
-bearer_scheme = HTTPBearer()
+bearer_scheme = HTTPBearer(auto_error=False)
 
 
 def get_current_user(
-    credentials: HTTPAuthorizationCredentials = Depends(bearer_scheme),
+    credentials: HTTPAuthorizationCredentials | None = Depends(bearer_scheme),
     db: Session = Depends(get_db),
 ) -> User:
     credentials_error = HTTPException(
@@ -21,10 +22,13 @@ def get_current_user(
         headers={"WWW-Authenticate": "Bearer"},
     )
 
+    if credentials is None or credentials.scheme.lower() != "bearer":
+        raise credentials_error
+
     try:
         payload = decode_access_token(credentials.credentials)
-        user_id = int(payload.get("sub", ""))
-    except (InvalidTokenError, ValueError, TypeError, RuntimeError):
+        user_id = int(payload["sub"])
+    except (InvalidTokenError, ValueError, TypeError, KeyError, RuntimeError):
         raise credentials_error
 
     user = db.query(User).filter(User.id == user_id).first()

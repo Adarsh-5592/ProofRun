@@ -21,7 +21,7 @@ it inside isolated Docker containers.
 - Backend: Python and FastAPI
 - AI: Vultr Serverless Inference
 - Sandbox: Docker
-- Database: SQLite (planned)
+- Database: SQLite (current development database)
 
 ## Sandbox Security
 
@@ -46,24 +46,27 @@ it inside isolated Docker containers.
 
 ## Current Progress
 
-The Docker sandbox and security controls are implemented.
-All 19 automated tests pass.
+The Docker sandbox and FastAPI backend are implemented.
 
 Implemented:
 - Restricted Docker execution environment
 - Resource and output limits
 - Network and filesystem isolation
 - Non-root execution
-- Automatic container cleanup after execution
+- Automatic container cleanup
 - Stale-container cleanup utility
 - Per-process concurrency limit (2 simultaneous executions)
+- FastAPI backend and REST API
+- JWT authentication and Argon2 password hashing
+- Login rate limiting (5 attempts per minute per IP)
+- User-specific task and execution history
+- Authentication and sandbox security tests
 - Security and integration documentation
 
 Pending:
-- Backend and AI integration
 - Frontend integration
-- Database integration
 - End-to-end testing
+- Vultr Serverless Inference activation
 - Vultr deployment and production hardening
 
 ## Security Notice

@@ -212,3 +212,34 @@ such as gVisor or dedicated microVMs should be evaluated.
 
 Production deployment must include host monitoring,
 concurrency controls and stale-container recovery.
+
+## 14. Authentication and API Security
+
+ProofRun uses JWT-based authentication to protect user-specific API resources.
+
+Implemented controls:
+
+- Passwords are hashed using Argon2.
+- Registration requires passwords of at least 12 characters.
+- Email addresses are normalized before account lookup and registration.
+- JWT tokens use HS256 and include subject, issued-at and expiration claims.
+- Invalid, expired and missing authentication tokens are rejected.
+- Inactive accounts cannot authenticate.
+- Production configuration requires a JWT secret of at least 32 bytes.
+- Wildcard CORS origins are rejected in production.
+- The mock AI provider is rejected in production.
+
+### Login Rate Limiting
+
+The login endpoint is limited to five requests per minute per client IP address.
+
+The current implementation uses SlowAPI with in-memory storage.
+
+Limitations:
+
+- Rate-limit state is local to each application process.
+- State is lost when the application restarts.
+- Multiple workers or application instances do not share rate-limit counters.
+- Production deployments using multiple workers or instances should use shared storage, such as Redis, or an equivalent centralized rate-limiting solution.
+
+This rate limiter is an additional authentication protection and does not replace infrastructure-level abuse prevention.
