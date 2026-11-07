@@ -1,67 +1,16 @@
 
-import pytest
-
-from fastapi.testclient import TestClient
-from sqlalchemy import create_engine
-from sqlalchemy.orm import sessionmaker
-from sqlalchemy.pool import StaticPool
-
-from app.main import app
-from app.core.config import settings
 from app.core.security import create_access_token
-from app.database.connection import Base, get_db
 from app.models.user import User
 from app.models.task import Task
 from app.models.execution import Execution
 
 
-@pytest.fixture
-def test_database():
-    engine = create_engine(
-        "sqlite://",
-        connect_args={"check_same_thread": False},
-        poolclass=StaticPool,
-    )
-
-    Base.metadata.create_all(bind=engine)
-
-    TestingSessionLocal = sessionmaker(
-        bind=engine,
-        autoflush=False,
-        autocommit=False,
-    )
-
-    yield TestingSessionLocal
-
-    Base.metadata.drop_all(bind=engine)
-    engine.dispose()
+def auth_headers(user_id):
+    token = create_access_token(user_id)
+    return {"Authorization": f"Bearer {token}"}
 
 
-@pytest.fixture
-def client(test_database, monkeypatch):
-    monkeypatch.setattr(
-        settings,
-        "jwt_secret_key",
-        "test-only-secret-key-for-proofrun",
-    )
-
-    def override_get_db():
-        db = test_database()
-        try:
-            yield db
-        finally:
-            db.close()
-
-    app.dependency_overrides[get_db] = override_get_db
-
-    with TestClient(app) as test_client:
-        yield test_client
-
-    app.dependency_overrides.clear()
-
-
-@pytest.fixture
-def two_users(test_database):
+def test_user_can_only_see_own_tasks(client, test_database):
     db = test_database()
 
     user_a = User(
@@ -109,6 +58,69 @@ def two_users(test_database):
 
     task_a_id = task_a.id
     task_b_id = task_b.id
+    db.close()
+
+    response = client.get(
+        "/api/v1/tasks",
+        headers=auth_headers(user_a_id),
+    )
+
+    assert response.status_code == 200
+
+    returned_ids = [task["id"] for task in response.json()]
+
+    assert task_a_id in returned_ids
+    assert task_b_id not in returned_ids
+
+
+def test_user_can_only_see_own_executions(client, test_database):
+    db = test_database()
+
+    user_a = User(
+        full_name="User A",
+        email="executiona@test.com",
+        hashed_password="test-hash-a",
+    )
+
+    user_b = User(
+        full_name="User B",
+        email="executionb@test.com",
+        hashed_password="test-hash-b",
+    )
+
+    db.add_all([user_a, user_b])
+    db.commit()
+
+    db.refresh(user_a)
+    db.refresh(user_b)
+
+    user_a_id = user_a.id
+    user_b_id = user_b.id
+
+    task_a = Task(
+        user_id=user_a_id,
+        prompt="Task A",
+        generated_code="print('A')",
+        model_name="mock",
+        generation_status="completed",
+    )
+
+    task_b = Task(
+        user_id=user_b_id,
+        prompt="Task B",
+        generated_code="print('B')",
+        model_name="mock",
+        generation_status="completed",
+    )
+
+    db.add_all([task_a, task_b])
+    db.commit()
+
+    db.refresh(task_a)
+    db.refresh(task_b)
+
+    task_a_id = task_a.id
+    task_b_id = task_b.id
 
     execution_a = Execution(
         task_id=task_a_id,
@@ -130,37 +142,9 @@ def two_users(test_database):
     db.commit()
     db.close()
 
-    return {
-        "user_a_id": user_a_id,
-        "user_b_id": user_b_id,
-        "task_a_id": task_a_id,
-        "task_b_id": task_b_id,
-    }
-
-
-def auth_headers(user_id):
-    token = create_access_token(user_id)
-    return {"Authorization": f"Bearer {token}"}
-
-
-def test_user_can_only_see_own_tasks(client, two_users):
-    response = client.get(
-        "/api/v1/tasks",
-        headers=auth_headers(two_users["user_a_id"]),
-    )
-
-    assert response.status_code == 200
-
-    returned_ids = [task["id"] for task in response.json()]
-
-    assert two_users["task_a_id"] in returned_ids
-    assert two_users["task_b_id"] not in returned_ids
-
-
-def test_user_can_only_see_own_executions(client, two_users):
     response = client.get(
         "/api/v1/executions",
-        headers=auth_headers(two_users["user_a_id"]),
+        headers=auth_headers(user_a_id),
     )
 
     assert response.status_code == 200
@@ -170,17 +154,57 @@ def test_user_can_only_see_own_executions(client, two_users):
         for execution in response.json()
     ]
 
-    assert two_users["task_a_id"] in returned_task_ids
-    assert two_users["task_b_id"] not in returned_task_ids
+    assert task_a_id in returned_task_ids
+    assert task_b_id not in returned_task_ids
 
 
 def test_user_cannot_execute_another_users_task(
     client,
-    two_users,
+    test_database,
     monkeypatch,
 ):
+    db = test_database()
+
+    user_a = User(
+        full_name="User A",
+        email="executea@test.com",
+        hashed_password="test-hash-a",
+    )
+
+    user_b = User(
+        full_name="User B",
+        email="executeb@test.com",
+        hashed_password="test-hash-b",
+    )
+
+    db.add_all([user_a, user_b])
+    db.commit()
+
+    db.refresh(user_a)
+    db.refresh(user_b)
+
+    user_a_id = user_a.id
+    user_b_id = user_b.id
+
+    task_b = Task(
+        user_id=user_b_id,
+        prompt="Private task belonging to User B",
+        generated_code="print('User B')",
+        model_name="mock",
+        generation_status="completed",
+    )
+
+    db.add(task_b)
+    db.commit()
+    db.refresh(task_b)
+
+    task_b_id = task_b.id
+    db.close()
+
     def unexpected_execution(*args, **kwargs):
-        pytest.fail("Sandbox must not execute another user's task")
+        raise AssertionError(
+            "Sandbox must not execute another user's task"
+        )
 
     monkeypatch.setattr(
         "app.api.routes.execute.run_code",
@@ -189,9 +213,9 @@ def test_user_cannot_execute_another_users_task(
 
     response = client.post(
         "/api/v1/execute",
-        headers=auth_headers(two_users["user_a_id"]),
+        headers=auth_headers(user_a_id),
         json={
-            "task_id": two_users["task_b_id"],
+            "task_id": task_b_id,
             "timeout_seconds": 10,
         },
     )
@@ -210,3 +234,53 @@ def test_unauthenticated_user_cannot_access_execution_history(client):
     response = client.get("/api/v1/executions")
 
     assert response.status_code in (401, 403)
+
+
+def test_failed_generation_task_appears_in_task_history(
+    client,
+    test_database,
+):
+    db = test_database()
+
+    user = User(
+        full_name="Failed Generation User",
+        email="failed@test.com",
+        hashed_password="test-hash",
+    )
+
+    db.add(user)
+    db.commit()
+    db.refresh(user)
+
+    user_id = user.id
+
+    failed_task = Task(
+        user_id=user_id,
+        prompt="Generate a Python program",
+        generated_code=None,
+        model_name=None,
+        generation_status="failed",
+    )
+
+    db.add(failed_task)
+    db.commit()
+    db.refresh(failed_task)
+
+    task_id = failed_task.id
+    db.close()
+
+    response = client.get(
+        "/api/v1/tasks",
+        headers=auth_headers(user_id),
+    )
+
+    assert response.status_code == 200
+
+    tasks = response.json()
+
+    returned_task = next(
+        task for task in tasks if task["id"] == task_id
+    )
+
+    assert returned_task["generation_status"] == "failed"
+    assert returned_task["generated_code"] is None

@@ -1,6 +1,6 @@
 from datetime import datetime
 
-from pydantic import BaseModel, Field, ConfigDict
+from pydantic import BaseModel, ConfigDict, Field
 
 
 class GenerateRequest(BaseModel):
@@ -14,8 +14,8 @@ class GenerateRequest(BaseModel):
 class GenerateResponse(BaseModel):
     id: str
     prompt: str
-    generated_code: str
-    model_name: str
+    generated_code: str | None
+    model_name: str | None
     generation_status: str
     created_at: datetime
 

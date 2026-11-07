@@ -1,3 +1,4 @@
+
 from fastapi import APIRouter, Depends, HTTPException, status
 from sqlalchemy.orm import Session
 
@@ -6,7 +7,7 @@ from app.database.connection import get_db
 from app.models.task import Task
 from app.models.user import User
 from app.schemas.task import GenerateRequest, GenerateResponse
-from app.services.ai_service import generate_code
+from app.services.ai_service import AIServiceError, generate_code
 
 router = APIRouter(tags=["Code Generation"])
 
@@ -31,6 +32,10 @@ async def generate_task(
     db.commit()
     db.refresh(task)
 
+    # Preserve the ID before any operation that might expire the ORM object.
+    task_id = task.id
+    user_id = current_user.id
+
     try:
         result = await generate_code(request.prompt)
 
@@ -46,16 +51,37 @@ async def generate_task(
     except Exception as exc:
         db.rollback()
 
-        task = db.query(Task).filter(
-            Task.id == task.id,
-            Task.user_id == current_user.id,
-        ).first()
+        # Re-fetch the task using both its ID and owner ID.
+        failed_task = (
+            db.query(Task)
+            .filter(
+                Task.id == task_id,
+                Task.user_id == user_id,
+            )
+            .first()
+        )
 
-        if task:
-            task.generation_status = "failed"
-            db.commit()
+        if failed_task is not None:
+            failed_task.generated_code = None
+            failed_task.model_name = None
+            failed_task.generation_status = "failed"
+
+            try:
+                db.commit()
+            except Exception:
+                db.rollback()
+                raise HTTPException(
+                    status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+                    detail="Could not save the generation failure status.",
+                ) from exc
+
+        if isinstance(exc, AIServiceError):
+            raise HTTPException(
+                status_code=status.HTTP_502_BAD_GATEWAY,
+                detail="Code generation failed. Please try again.",
+            ) from exc
 
         raise HTTPException(
-            status_code=status.HTTP_502_BAD_GATEWAY,
-            detail="Code generation failed. Please try again.",
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail="An internal error occurred during code generation.",
         ) from exc
