@@ -4,21 +4,19 @@ from fastapi.middleware.cors import CORSMiddleware
 
 from app.core.config import settings
 from app.database.connection import Base, engine
-
-# Import models before creating database tables.
 from app.models import User, Task, Execution
 
-# Import API routers.
 from app.api.routes.auth import router as auth_router
 from app.api.routes.generate import router as generate_router
 from app.api.routes.execute import router as execute_router
 from app.api.routes.tasks import router as tasks_router
+from app.api.routes.executions import router as executions_router
 
-# Create database tables.
+
+# Create database tables
 Base.metadata.create_all(bind=engine)
 
 
-# Initialize FastAPI application.
 app = FastAPI(
     title=settings.app_name,
     description="Secure AI-generated code execution platform.",
@@ -26,7 +24,7 @@ app = FastAPI(
 )
 
 
-# Configure CORS.
+# CORS configuration
 origins = [
     origin.strip()
     for origin in settings.cors_origins.split(",")
@@ -42,13 +40,14 @@ app.add_middleware(
 )
 
 
-# Register API routers.
+# API routes
 app.include_router(auth_router, prefix="/api/v1")
 app.include_router(generate_router, prefix="/api/v1")
 app.include_router(execute_router, prefix="/api/v1")
 app.include_router(tasks_router, prefix="/api/v1")
+app.include_router(executions_router, prefix="/api/v1")
 
-# Health check endpoint.
+
 @app.get("/api/v1/health")
 def health_check():
     return {
@@ -58,10 +57,10 @@ def health_check():
     }
 
 
-# Root endpoint.
 @app.get("/")
 def root():
     return {
         "message": "Welcome to ProofRun API",
         "docs": "/docs",
     }
+
