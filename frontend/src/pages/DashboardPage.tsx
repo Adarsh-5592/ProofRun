@@ -71,7 +71,7 @@ export default function DashboardPage() {
           {healthError ? (
             <>
               <WifiOff size={16} />
-              <span>Backend is unreachable. Start the FastAPI server at <code className="font-mono text-xs">http://localhost:8000</code>.</span>
+              <span>Backend is unreachable. Please verify that the backend tunnel or server is online.</span>
             </>
           ) : (
             <>
